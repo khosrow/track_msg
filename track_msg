@@ -1,0 +1,181 @@
+#!/usr/bin/python
+#
+# postfix-msg-track.py
+# Khosrow Ebrahimpour - May 2012
+# this script will track messages in the postfix log file
+
+"""Search postfix logs for emails by making a match on sender and recipient. 
+
+The message(s) are displayed as they are queued and sent by Postfix.
+
+Usage: track_msg -l [LOGFILE] -f [SENDER ADDRESS] -t [RECIPIENT ADDRESS] [OPTIONS] 
+
+Options:
+	-h/--help
+		show this message
+
+	-l LOGFILE
+        --logfile=LOGFILE
+		name of the logfile to analyze
+
+	-f FROM_ADDR
+	--from=FROM_ADDR
+		email address of the sender
+
+	-t TO_ADDR
+	--to=TO_ADDR
+		email address of the recipient
+
+	-d DAY
+	--day=DAY
+		date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>
+
+	-c/--color
+		enable color coding of the queue IDs
+
+	-v/--verbose
+		display debug information
+""" 
+
+import re
+import getopt
+import os
+import sys 
+
+from termcolor import colored, cprint
+
+program = sys.argv[0]
+
+def usage(code,msg=''): 
+    if code:
+        fd = sys.stderr
+    else:
+        fd = sys.stdout
+    print >> fd, __doc__
+    if msg:
+        print >> fd, msg
+    sys.exit(code)
+
+
+def main():
+    logfile = ""
+    from_addr = ""
+    to_addr = ""
+    date_stamp = ""
+    DEBUG = False
+    COLOR = False
+    timestamps = list()
+    queue_ids = list()
+    colors = ['grey' , 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
+
+    try:
+	opts, args = getopt.getopt(sys.argv[1:], "hl:f:t:d:cv", ["help", "logfile=", "from=", "to=", "day=", "color", "verbose"])
+    except getopt.error, msg:
+	usage(2, msg)
+
+    if not opts:
+	usage(2)
+
+    for opt, arg in opts:
+	if opt in ("-h", "--help"):
+	    usage(0)
+	elif opt in ("-l", "--logfile="):
+	    logfile = arg
+	elif opt in ("-f", "--from="):
+		m = re.search("(.*)@(.*)", arg, re.IGNORECASE)
+		if ( m != None):
+			from_addr = arg
+		else:
+			print "ERROR: From address must be a correctly formatted email address."
+			print "" 
+			usage(2)
+	elif opt in ("-t", "--to="):
+	    to_addr = arg
+	elif opt in ("-d", "--day="):
+	    date_stamp = arg
+	elif opt in ("-c", "--color"):
+		COLOR = True
+	elif opt in ("-v", "--verbose"):
+	    DEBUG = True
+
+    if not from_addr or not to_addr or not logfile:
+        usage(2)
+    
+    if not sys.stdout.isatty():
+	COLOR = False
+	
+    if COLOR:
+	color = "white"
+    else:
+	color = None
+    
+    print colored("Search Params", color)
+    print colored("-------------", color)
+    print colored("Sender: " + from_addr, color)
+    print colored("Recipient: " + to_addr, color)
+    print colored("Day: " + date_stamp, color)
+    print colored("-------------", color)
+
+    try:
+	for line in open(logfile):
+	    # extract timestamps of messages with matching to, from, and day if defined
+	    if ( date_stamp == "" ):
+		search_query = "^(\w\w\w \d\d? \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
+	    else:
+		search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
+	    m = re.search(search_query, line, re.IGNORECASE)
+	    if ( m != None ):
+		if DEBUG:
+		    print "DEBUG -- timestamp: " + m.group(1)
+		timestamps.append(m.group(1))
+		
+		if COLOR:
+		    print colored(m.group(1), attrs=['reverse']) + " " + m.group(2) + " " + m.group(3) + " " + m.group(4) + " " + m.group(5)
+		else:
+		    print line,
+		continue
+	    
+	    if timestamps:	    
+		# iterate through the log and find queue ID during the matched times
+		s = "("
+		for t in timestamps:
+		    s += t + "|"
+		search_query = s[:-1] + ") .+ (postfix/smtpd\[\d+\]:) (\w+): client="
+		m = re.search(search_query, line, re.IGNORECASE)
+		if ( m != None ):
+		    if DEBUG:
+			print "DEBUG -- queue ID: " + m.group(3)
+		    queue_ids.append(m.group(3))
+		    
+	    if queue_ids:
+		# iterate through the queue ids that we found
+		color_code = 1
+		s = ""
+		for q in queue_ids:
+		    s += q + "|" 
+		    search_query = "(\w\w\w \d\d? \d\d:\d\d:\d\d) (.*) (postfix/\w*\[\d+\]:) ("+q+"): (.*)"
+		    #search_query = "(\w\w\w \d\d? \d\d:\d\d:\d\d) (.*) (postfix/\w*\[\d+\]:) ("+s[:-1] +"): (.*)"
+		    m = re.search(search_query, line, re.IGNORECASE)
+		    if ( m != None ):
+			#print m.group(1) + " " + m.group(2) + " " + m.group(3) + " " + colored(m.group(4), colors[2], attrs=[ 'bold']) + ": " + m.group(5)
+			if COLOR:
+			    print m.group(1) + " " + m.group(2) + " " + m.group(3) + " " + colored(m.group(4), colors[color_code%10]) + ": " + m.group(5)
+			else:
+			    print m.group(1) + " " + m.group(2) + " " + m.group(3) + " " + m.group(4) + ": " + m.group(5)
+		    color_code = color_code + 1
+		    
+	if COLOR:
+	    color = "white"
+	    attr = ['bold']
+	else:
+	    color = None
+	    attr = None
+	cprint("Results:", color, attrs=attr)
+	cprint("-------------", color, attrs=attr)
+	cprint("Found " + str(len(timestamps)) + " email(s) and " + str(len(queue_ids)) + " queue ids.", color, attrs=attr)
+    except IOError:
+	print "Error: unable to read", logfile
+	sys.exit(1)
+		    
+if __name__ == "__main__":
+    main()
