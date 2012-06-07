@@ -64,8 +64,10 @@ def main():
     date_stamp = ""
     DEBUG = False
     COLOR = False
+    hosts = list()
     timestamps = list()
     queue_ids = list()
+    msg_ids = list()
     colors = ['grey' , 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
 
     try:
@@ -119,51 +121,79 @@ def main():
     try:
 	for line in open(logfile):
 	    # extract timestamps of messages with matching to, from, and day if defined
-	    if ( date_stamp == "" ):
-		search_query = "^(\w\w\w \d\d? \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
+	    if ( date_stamp == "" ):		
+		search_query = "^(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
 	    else:
-		search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
+		search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
 	    m = re.search(search_query, line, re.IGNORECASE)
-	    if ( m != None ):
+	    if m is not None:
 		if DEBUG:
 		    print "DEBUG -- timestamp: " + m.group(1)
+		    print "DEBUG -- helo: " + m.group(3)
+		search_query = "\[(.*)\]"
+		ip_match = re.search(search_query, m.group(3))
+		if ip_match is not None:
+		    if DEBUG:
+			print "DEBUG -- ip address: " + ip_match.group(1)
+		    hosts.append(ip_match.group(1))
 		timestamps.append(m.group(1))
 		
 		if COLOR:
-		    print colored(m.group(1), attrs=['reverse']) + " " + m.group(2) + " " + m.group(3) + " " + m.group(4) + " " + m.group(5)
+		    print colored(m.group(1), attrs=['reverse']) + " " + m.group(2) + " " + m.group(3) + " " + m.group(4) + " " + m.group(5) + " " + m.group(6) + " " + m.group(7) 
 		else:
 		    print line,
 		continue
 	    
-	    if timestamps:	    
-		# iterate through the log and find queue ID during the matched times
-		s = "("
-		for t in timestamps:
-		    s += t + "|"
-		search_query = s[:-1] + ") .+ (postfix/smtpd\[\d+\]:) (\w+): client="
+	    if hosts:
+		host = hosts[0]
+		search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) .+ (postfix/smtpd\[\d+\]:) (\w+): client=(.*)\[(" + host + ")\]"
 		m = re.search(search_query, line, re.IGNORECASE)
-		if ( m != None ):
+		if m is not None:
 		    if DEBUG:
-			print "DEBUG -- queue ID: " + m.group(3)
+			print "DEBUG -- queue ID: " + m. group(3)
+		    hosts.pop()
 		    queue_ids.append(m.group(3))
 		    
 	    if queue_ids:
 		# iterate through the queue ids that we found
 		color_code = 1
-		s = ""
-		for q in queue_ids:
-		    s += q + "|" 
-		    search_query = "(\w\w\w \d\d? \d\d:\d\d:\d\d) (.*) (postfix/\w*\[\d+\]:) ("+q+"): (.*)"
-		    #search_query = "(\w\w\w \d\d? \d\d:\d\d:\d\d) (.*) (postfix/\w*\[\d+\]:) ("+s[:-1] +"): (.*)"
+		found_queue = False
+		for q in queue_ids:		    
+		    search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) ("+q+"): (.*)"
 		    m = re.search(search_query, line, re.IGNORECASE)
-		    if ( m != None ):
-			#print m.group(1) + " " + m.group(2) + " " + m.group(3) + " " + colored(m.group(4), colors[2], attrs=[ 'bold']) + ": " + m.group(5)
+		    if m is not None:
+			if m.group(4) == "cleanup":
+			    msg_id_match = re.search("message-id=<(.*)>", m.group(7))
+			    if msg_id_match is not None:
+				if DEBUG:
+				    print "DEBUG -- message-id: " + msg_id_match.group(1)			    
+			    msg_ids.append(msg_id_match.group(1))
 			if COLOR:
-			    print m.group(1) + " " + m.group(2) + " " + m.group(3) + " " + colored(m.group(4), colors[color_code%10]) + ": " + m.group(5)
-			else:
-			    print m.group(1) + " " + m.group(2) + " " + m.group(3) + " " + m.group(4) + ": " + m.group(5)
+			    print m.group(1) + " " + m.group(2) + " " + m.group(3) +  m.group(4) + m.group(5) + " " + colored(m.group(6), colors[color_code%8]) + ": " + m.group(7)
+			else:			    
+			    print m.group(0)
+			found_queue = True
+			break
 		    color_code = color_code + 1
-		    
+		# if we matched a queue id no need to process for other possibilities
+		if found_queue:
+		    continue	    
+	    
+	    if msg_ids:
+		for msg_id in msg_ids:
+		    search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) (.+): (message-id=<"+msg_id+">)"
+		    m = re.search(search_query, line, re.IGNORECASE)
+		    if m is not None:
+			if DEBUG:
+			    print "DEBUG -- new queue ID: " + m.group(6)
+			queue_ids.append(m.group(6))
+			if COLOR:
+			    color_code = len(queue_ids)%8
+			    print m.group(1) + " " + m.group(2) + " " + m.group(3) +  m.group(4) + m.group(5) + " " + colored(m.group(6), colors[color_code]) + ": " + m.group(7)
+			else:			    
+			    print m.group(0)
+			# if we matched a msg_id no need to proceed further
+			continue		    
 	if COLOR:
 	    color = "white"
 	    attr = ['bold']
