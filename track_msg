@@ -56,6 +56,9 @@ def usage(code,msg=''):
         print >> fd, msg
     sys.exit(code)
 
+def log(msg, debug_mode):
+    if debug_mode:
+	print "DEBUG -- " + msg
 
 def main():
     logfile = ""
@@ -127,14 +130,12 @@ def main():
 		search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
 	    m = re.search(search_query, line, re.IGNORECASE)
 	    if m is not None:
-		if DEBUG:
-		    print "DEBUG -- timestamp: " + m.group(1)
-		    print "DEBUG -- helo: " + m.group(3)
+		log("timestamp: " + m.group(1), DEBUG)
+		log("helo: " + m.group(3), DEBUG)
 		search_query = "\[(.*)\]"
 		ip_match = re.search(search_query, m.group(3))
 		if ip_match is not None:
-		    if DEBUG:
-			print "DEBUG -- ip address: " + ip_match.group(1)
+		    log("ip address: " + ip_match.group(1), DEBUG)
 		    hosts.append(ip_match.group(1))
 		timestamps.append(m.group(1))
 		
@@ -149,8 +150,7 @@ def main():
 		search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) .+ (postfix/smtpd\[\d+\]:) (\w+): client=(.*)\[(" + host + ")\]"
 		m = re.search(search_query, line, re.IGNORECASE)
 		if m is not None:
-		    if DEBUG:
-			print "DEBUG -- queue ID: " + m. group(3)
+		    log("queue ID: " + m. group(3), DEBUG)
 		    hosts.pop()
 		    queue_ids.append(m.group(3))
 		    
@@ -165,9 +165,8 @@ def main():
 			if m.group(4) == "cleanup":
 			    msg_id_match = re.search("message-id=<(.*)>", m.group(7))
 			    if msg_id_match is not None:
-				if DEBUG:
-				    print "DEBUG -- message-id: " + msg_id_match.group(1)			    
-			    msg_ids.append(msg_id_match.group(1))
+				log("message-id: " + msg_id_match.group(1), DEBUG)
+				msg_ids.append(msg_id_match.group(1))
 			if COLOR:
 			    print m.group(1) + " " + m.group(2) + " " + m.group(3) +  m.group(4) + m.group(5) + " " + colored(m.group(6), colors[color_code%8]) + ": " + m.group(7)
 			else:			    
@@ -184,8 +183,7 @@ def main():
 		    search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) (.+): (message-id=<"+msg_id+">)"
 		    m = re.search(search_query, line, re.IGNORECASE)
 		    if m is not None:
-			if DEBUG:
-			    print "DEBUG -- new queue ID: " + m.group(6)
+			log("new queue ID: " + m.group(6), DEBUG)
 			queue_ids.append(m.group(6))
 			if COLOR:
 			    color_code = len(queue_ids)%8
