@@ -11,30 +11,30 @@ The message(s) are displayed as they are queued and sent by Postfix.
 Usage: track_msg -l [LOGFILE] -f [SENDER ADDRESS] -t [RECIPIENT ADDRESS] [OPTIONS] 
 
 Options:
-	-h/--help
-		show this message
+    -h/--help
+        show this message
 
-	-l LOGFILE
+    -l LOGFILE
         --logfile=LOGFILE
-		name of the logfile to analyze
+        name of the logfile to analyze
 
-	-f FROM_ADDR
-	--from=FROM_ADDR
-		email address of the sender
+    -f FROM_ADDR
+    --from=FROM_ADDR
+        email address of the sender
 
-	-t TO_ADDR
-	--to=TO_ADDR
-		email address of the recipient
+    -t TO_ADDR
+    --to=TO_ADDR
+        email address of the recipient
 
-	-d DAY
-	--day=DAY
-		date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>
+    -d DAY
+    --day=DAY
+        date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>
 
-	-c/--color
-		enable color coding of the queue IDs
+    -c/--color
+        enable color coding of the queue IDs
 
-	-v/--verbose
-		display debug information
+    -v/--verbose
+        display debug information
 """ 
 
 import re
@@ -58,7 +58,7 @@ def usage(code,msg=''):
 
 def log(msg, debug_mode):
     if debug_mode:
-	print "DEBUG -- " + msg
+        print "DEBUG -- " + msg
 
 def main():
     logfile = ""
@@ -74,45 +74,43 @@ def main():
     colors = ['grey' , 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
 
     try:
-	opts, args = getopt.getopt(sys.argv[1:], "hl:f:t:d:cv", ["help", "logfile=", "from=", "to=", "day=", "color", "verbose"])
+        opts, args = getopt.getopt(sys.argv[1:], "hl:f:t:d:cv", ["help", "logfile=", "from=", "to=", "day=", "color", "verbose"])
     except getopt.error, msg:
-	usage(2, msg)
+        usage(2, msg)
 
     if not opts:
-	usage(2)
+        usage(2)
 
     for opt, arg in opts:
-	if opt in ("-h", "--help"):
-	    usage(0)
-	elif opt in ("-l", "--logfile="):
-	    logfile = arg
-	elif opt in ("-f", "--from="):
-		m = re.search("(.*)@(.*)", arg, re.IGNORECASE)
-		if ( m != None):
-			from_addr = arg
-		else:
-			print "ERROR: From address must be a correctly formatted email address."
-			print "" 
-			usage(2)
-	elif opt in ("-t", "--to="):
-	    to_addr = arg
-	elif opt in ("-d", "--day="):
-	    date_stamp = arg
-	elif opt in ("-c", "--color"):
-		COLOR = True
-	elif opt in ("-v", "--verbose"):
-	    DEBUG = True
+        if opt in ("-h", "--help"):
+            usage(0)
+        elif opt in ("-l", "--logfile"):
+            logfile = arg
+        elif opt in ("-f", "--from"):
+            m = re.search("(.*)@(.*)", arg, re.IGNORECASE)
+            if ( m != None):
+                from_addr = arg
+            else:
+                usage(2, msg="ERROR: From address must be a correctly formatted email address.")
+        elif opt in ("-t", "--to"):
+            to_addr = arg
+        elif opt in ("-d", "--day"):
+            date_stamp = arg
+        elif opt in ("-c", "--color"):
+            COLOR = True
+        elif opt in ("-v", "--verbose"):
+            DEBUG = True
 
     if not from_addr or not to_addr or not logfile:
-        usage(2)
+        usage(2, msg="FROM_ADDR, TO_ADDR, and LOGFILE are mandatory")
     
     if not sys.stdout.isatty():
-	COLOR = False
-	
+        COLOR = False
+    
     if COLOR:
-	color = "white"
+        color = "white"
     else:
-	color = None
+        color = None
     
     print colored("Search Params", color)
     print colored("-------------", color)
@@ -122,88 +120,101 @@ def main():
     print colored("-------------", color)
 
     try:
-	for line in open(logfile):
-	    # extract timestamps of messages with matching to, from, and day if defined
-	    if ( date_stamp == "" ):		
-		search_query = "^(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
-	    else:
-		search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
-	    m = re.search(search_query, line, re.IGNORECASE)
-	    if m is not None:
-		log("timestamp: " + m.group(1), DEBUG)
-		log("helo: " + m.group(3), DEBUG)
-		search_query = "\[(.*)\]"
-		ip_match = re.search(search_query, m.group(3))
-		if ip_match is not None:
-		    log("ip address: " + ip_match.group(1), DEBUG)
-		    hosts.append(ip_match.group(1))
-		timestamps.append(m.group(1))
-		
-		if COLOR:
-		    print colored(m.group(1), attrs=['reverse']) + " " + m.group(2) + " " + m.group(3) + " " + m.group(4) + " " + m.group(5) + " " + m.group(6) + " " + m.group(7) 
-		else:
-		    print line,
-		continue
-	    
-	    if hosts:
-		host = hosts[0]
-		search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) .+ (postfix/smtpd\[\d+\]:) (\w+): client=(.*)\[(" + host + ")\]"
-		m = re.search(search_query, line, re.IGNORECASE)
-		if m is not None:
-		    log("queue ID: " + m. group(3), DEBUG)
-		    hosts.pop()
-		    queue_ids.append(m.group(3))
-		    
-	    if queue_ids:
-		# iterate through the queue ids that we found
-		color_code = 1
-		found_queue = False
-		for q in queue_ids:		    
-		    search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) ("+q+"): (.*)"
-		    m = re.search(search_query, line, re.IGNORECASE)
-		    if m is not None:
-			if m.group(4) == "cleanup":
-			    msg_id_match = re.search("message-id=<(.*)>", m.group(7))
-			    if msg_id_match is not None:
-				log("message-id: " + msg_id_match.group(1), DEBUG)
-				msg_ids.append(msg_id_match.group(1))
-			if COLOR:
-			    print m.group(1) + " " + m.group(2) + " " + m.group(3) +  m.group(4) + m.group(5) + " " + colored(m.group(6), colors[color_code%8]) + ": " + m.group(7)
-			else:			    
-			    print m.group(0)
-			found_queue = True
-			break
-		    color_code = color_code + 1
-		# if we matched a queue id no need to process for other possibilities
-		if found_queue:
-		    continue	    
-	    
-	    if msg_ids:
-		for msg_id in msg_ids:
-		    search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) (.+): (message-id=<"+msg_id+">)"
-		    m = re.search(search_query, line, re.IGNORECASE)
-		    if m is not None:
-			log("new queue ID: " + m.group(6), DEBUG)
-			queue_ids.append(m.group(6))
-			if COLOR:
-			    color_code = len(queue_ids)%8
-			    print m.group(1) + " " + m.group(2) + " " + m.group(3) +  m.group(4) + m.group(5) + " " + colored(m.group(6), colors[color_code]) + ": " + m.group(7)
-			else:			    
-			    print m.group(0)
-			# if we matched a msg_id no need to proceed further
-			continue		    
-	if COLOR:
-	    color = "white"
-	    attr = ['bold']
-	else:
-	    color = None
-	    attr = None
-	cprint("Results:", color, attrs=attr)
-	cprint("-------------", color, attrs=attr)
-	cprint("Found " + str(len(timestamps)) + " email(s) and " + str(len(queue_ids)) + " queue ids.", color, attrs=attr)
+        for line in open(logfile):
+            # extract timestamps of messages with matching to, from, and day if defined
+            if ( date_stamp == "" ):        
+                search_query = "^(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
+            else:
+                search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
+            
+            # Search for a line that contains both from_addr and to_addr
+            m = re.search(search_query, line, re.IGNORECASE)
+            if m is not None:
+                log("timestamp: " + m.group(1), DEBUG)
+                log("helo: " + m.group(3), DEBUG)
+                search_query = "\[(.*)\]"
+                ip_match = re.search(search_query, m.group(3))
+                if ip_match is not None:
+                    log("ip address: " + ip_match.group(1), DEBUG)
+                    # record the host ip so we can match the next line in the log
+                    hosts.append(ip_match.group(1))
+                    
+                timestamps.append(m.group(1))
+                if COLOR:
+                    print colored(m.group(1), attrs=['reverse']) + " " + m.group(2) + " " + m.group(3) + " " + m.group(4) + " " + m.group(5) + " " + m.group(6) + " " + m.group(7) 
+                else:
+                    print line,
+                
+                continue
+            
+            # if we have anything in the hosts list try and match
+            if hosts:
+                host = hosts[0]
+                search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) .+ (postfix/smtpd\[\d+\]:) (\w+): client=(.*)\[(" + host + ")\]"
+                m = re.search(search_query, line, re.IGNORECASE)
+                if m is not None:
+                    log("queue ID: " + m. group(3), DEBUG)
+                    # if we found the line, clean up the list
+                    hosts.pop()
+                    # add the queue id to a list to be searched for the logs
+                    queue_ids.append(m.group(3))
+            
+            # if we've accumulated any queue ids see if the current line has a match
+            if queue_ids:
+                color_code = 1
+                found_queue = False
+                # iterate through the queue ids that we found
+                for q in queue_ids:            
+                    search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) ("+q+"): (.*)"
+                    m = re.search(search_query, line, re.IGNORECASE)
+                    if m is not None:
+                        # if the line is from the cleanup daemon, collect the message-id
+                        if m.group(4) == "cleanup":
+                            msg_id_match = re.search("message-id=<(.*)>", m.group(7))
+                            if msg_id_match is not None:
+                                log("message-id: " + msg_id_match.group(1), DEBUG)
+                                msg_ids.append(msg_id_match.group(1))
+                        
+                        if COLOR:
+                            print m.group(1) + " " + m.group(2) + " " + m.group(3) +  m.group(4) + m.group(5) + " " + colored(m.group(6), colors[color_code%8]) + ": " + m.group(7)
+                        else:                
+                            print m.group(0)
+                        # if we matched a queue, we can stop going through the queue list
+                        found_queue = True
+                        break
+                    # keep track of the colors associated with each queue    
+                    color_code = color_code + 1
+                # if we matched a queue id no need to process for other possibilities in the log
+                if found_queue:
+                    continue        
+            
+            # if we have stored any message-ids extract the queue-id when cleanup daemon inserts in queue
+            if msg_ids:
+                for msg_id in msg_ids:
+                    search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) (.+): (message-id=<"+msg_id+">)"
+                    m = re.search(search_query, line, re.IGNORECASE)
+                    if m is not None:
+                        log("new queue ID: " + m.group(6), DEBUG)
+                        queue_ids.append(m.group(6))
+                        if COLOR:
+                            color_code = len(queue_ids)%8
+                            print m.group(1) + " " + m.group(2) + " " + m.group(3) +  m.group(4) + m.group(5) + " " + colored(m.group(6), colors[color_code]) + ": " + m.group(7)
+                        else:                
+                            print m.group(0)
+                        # if we matched a msg_id no need to proceed further
+                        break            
+        if COLOR:
+            color = "white"
+            attr = ['bold']
+        else:
+            color = None
+            attr = None
+        cprint("Results summary:", color, attrs=attr)
+        cprint("-------------", color, attrs=attr)
+        cprint("Found " + str(len(timestamps)) + " email(s) and " + str(len(queue_ids)) + " queue ids.", color, attrs=attr)
     except IOError:
-	print "Error: unable to read", logfile
-	sys.exit(1)
-		    
+        print "Error: unable to read", logfile
+        sys.exit(1)
+            
 if __name__ == "__main__":
     main()
