@@ -15,7 +15,7 @@ The following parameters are mandatory
 Credits 
 -------
 
-Code for colorterm.py was obtained from (PyPi)[http://pypi.python.org/pypi/termcolor/]
+Code for colorterm.py was obtained from [PyPi](http://pypi.python.org/pypi/termcolor/)
 
 License
 --------
