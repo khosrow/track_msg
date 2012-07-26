@@ -144,7 +144,6 @@ def main():
                     print colored(m.group(1), attrs=['reverse']) + " " + m.group(2) + " " + m.group(3) + " " + m.group(4) + " " + m.group(5) + " " + m.group(6) + " " + m.group(7) 
                 else:
                     print line,
-                
                 continue
             
             # if we have anything in the hosts list try and match
@@ -209,8 +208,8 @@ def main():
         else:
             color = None
             attr = None
-        cprint("Results summary:", color, attrs=attr)
-        cprint("-------------", color, attrs=attr)
+        cprint("Summary:", color, attrs=attr)
+        cprint("----------------", color, attrs=attr)
         cprint("Found " + str(len(timestamps)) + " email(s) and " + str(len(queue_ids)) + " queue ids.", color, attrs=attr)
     except IOError:
         print "Error: unable to read", logfile
