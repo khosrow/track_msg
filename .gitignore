@@ -1,0 +1,5 @@
+# some common Mac OS files to ignore
+.DS_Store
+
+# compiled python script
+*.pyc
