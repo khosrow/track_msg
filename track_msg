@@ -122,6 +122,8 @@ def main():
     try:
         for line in open(logfile):
             # extract timestamps of messages with matching to, from, and day if defined
+            # sample line:
+            # May 23 14:20:38 servername postfix/smtpd[9463]: NOQUEUE: filter: RCPT from mailhost.example.com[10.10.10.11]: <mailhost.example.com[10.10.10.11]>: Client host triggers FILTER smtp:[127.0.0.1]:10025; from=<john.doe@example.com> to=<jane.doe@example.org> proto=ESMTP helo=<mailhost.example.com>
             if ( date_stamp == "" ):        
                 search_query = "^(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
             else:
@@ -132,6 +134,7 @@ def main():
             if m is not None:
                 log("timestamp: " + m.group(1), DEBUG)
                 log("helo: " + m.group(3), DEBUG)
+                # Extract the ip address of the sender host ( see sample line above )
                 search_query = "\[(.*)\]"
                 ip_match = re.search(search_query, m.group(3))
                 if ip_match is not None:
@@ -147,6 +150,8 @@ def main():
                 continue
             
             # if we have anything in the hosts list try and match
+            # sample line:
+            # May 23 14:20:38 servername postfix/smtpd[9463]: 004B5127C7: client=mailhost.example.com[10.10.10.11]
             if hosts:
                 host = hosts[0]
                 search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) .+ (postfix/smtpd\[\d+\]:) (\w+): client=(.*)\[(" + host + ")\]"
@@ -163,6 +168,8 @@ def main():
                 color_code = 1
                 found_queue = False
                 # iterate through the queue ids that we found
+                # sample line:
+                # May 23 14:20:38 servername postfix/cleanup[9037]: 004B5127C7: message-id=<8C5DCD8543118F40845839A0FB2CAF563297FC@mailhost.example.com>
                 for q in queue_ids:            
                     search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) ("+q+"): (.*)"
                     m = re.search(search_query, line, re.IGNORECASE)
@@ -176,8 +183,7 @@ def main():
                         
                         if COLOR:
                             print m.group(1) + " " + m.group(2) + " " + m.group(3) +  m.group(4) + m.group(5) + " " + colored(m.group(6), colors[color_code%8]) + ": " + m.group(7)
-                        else:                
-                            print m.group(0)
+                        else:
                         # if we matched a queue, we can stop going through the queue list
                         found_queue = True
                         break
@@ -188,6 +194,8 @@ def main():
                     continue        
             
             # if we have stored any message-ids extract the queue-id when cleanup daemon inserts in queue
+            # sample line:
+            # May 23 14:20:38 servername postfix/cleanup[9037]: 004B5127C7: message-id=<8C5DCD8543118F40845839A0FB2CAF563297FC@mailhost.example.com>
             if msg_ids:
                 for msg_id in msg_ids:
                     search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/)(\w*|cleanup)(\[\d+\]:) (.+): (message-id=<"+msg_id+">)"
