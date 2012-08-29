@@ -14,9 +14,9 @@ Options:
     -h/--help
         show this message
 
-    -l LOGFILE
-        --logfile=LOGFILE
-        name of the logfile to analyze
+    -i LOGFILE
+        --infile=LOGFILE
+        name of the Postfix log file to analyze
 
     -f FROM_ADDR
     --from=FROM_ADDR
@@ -48,12 +48,12 @@ COLOR = False
 DEBUG = False
 
 class Message:
-    def __init__(self,pid,date):
+    def __init__(self,pid,date,color):
         self.pid = pid
         self.date = date
         self.qid_list = list()
         self.msg_id = ""
-        self.color = ""
+        self.color = color
     def getpid(self):
         return self.pid
     def getdate(self):
@@ -73,6 +73,8 @@ class Message:
         self.msg_id = msgid
     def getmsgid(self):
         return self.msg_id
+    def getcolor(self):
+        return self.color
                 
 def usage(code,msg=''): 
     if code:
@@ -84,7 +86,6 @@ def usage(code,msg=''):
         print >> fd, msg
     sys.exit(code)
 
-# def log(msg, debug_mode):
 def log(msg):
     if DEBUG:
         print "DEBUG -- " + msg
@@ -92,7 +93,7 @@ def log(msg):
 def main():
     global DEBUG
     global COLOR
-    logfile = ""
+    in_file = ""
     from_addr = ""
     to_addr = ""
     date_stamp = ""
@@ -101,7 +102,7 @@ def main():
     color_counter = 0
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hl:f:t:d:cv", ["help", "logfile=", "from=", "to=", "day=", "color", "verbose"])
+        opts, args = getopt.getopt(sys.argv[1:], "hi:f:t:d:cv", ["help", "infile=", "from=", "to=", "day=", "color", "verbose"])
     except getopt.error, msg:
         usage(2, msg)
 
@@ -111,8 +112,8 @@ def main():
     for opt, arg in opts:
         if opt in ("-h", "--help"):
             usage(0)
-        elif opt in ("-l", "--logfile"):
-            logfile = arg
+        elif opt in ("-i", "--infile"):
+            in_file = arg
         elif opt in ("-f", "--from"):
             m = re.search("(.*)@(.*)", arg, re.IGNORECASE)
             if ( m != None):
@@ -128,7 +129,7 @@ def main():
         elif opt in ("-v", "--verbose"):
             DEBUG = True
 
-    if not from_addr or not to_addr or not logfile:
+    if not from_addr or not to_addr or not in_file:
         usage(2, msg="FROM_ADDR, TO_ADDR, and LOGFILE are mandatory")
     
     if not sys.stdout.isatty():
@@ -147,18 +148,14 @@ def main():
     print colored("-------------", color)
 
     try:
-        for line in open(logfile):
+        for line in open(in_file):
             # extract timestamps of messages with matching to, from, and day if defined
             # sample line:
             # May 23 14:20:38 servername postfix/smtpd[9463]: NOQUEUE: filter: RCPT from mailhost.example.com[10.10.10.11]: <mailhost.example.com[10.10.10.11]>: Client host triggers FILTER smtp:[127.0.0.1]:10025; from=<john.doe@example.com> to=<jane.doe@example.org> proto=ESMTP helo=<mailhost.example.com>
             # tokenize the log line
             if ( date_stamp == "" ):        
-                #search_query = "^(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
-                #search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.+) (postfix/\w+\[)(\d+)(\]:) (\w): (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*> (.*)"
                 search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/\w+\[)(\d+)(\]:) (\w+): (.*)"
             else:
-                #search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.* NOQUEUE: .*) (<.*]>:) (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)"
-                #search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.+) (postfix/\w+\[)(\d+)(\]:) (\w): (.*) (from=<"+from_addr+">) (to=<"+to_addr+".*> (.*)"
                 search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.+) (postfix/\w+\[)(\d+)(\]:) (\w): (.*)"
             
             # Search for a line that contains both from_addr and to_addr and the date_stamp
@@ -172,47 +169,38 @@ def main():
                 queue_id = m.group(6)
                 generic_text = m.group(7)
 
-                # Search for the from and to
-                from_re = re.search("(.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)", generic_text, re.IGNORECASE)
-                # Search for the message-id
-                messageid_re = re.search("message-id=<(.*)>", generic_text, re.IGNORECASE)
-                # if there's a line with the "from" and "to" that we want, record the pid and date in a Message obj
-                if from_re is not None and queue_id == "NOQUEUE":
-                    # make a msg object
-                    msg = Message(postfix_pid, timestamp)
-                    msg_list.append(msg)
-                    color_counter += 1
-                    # log("timestamp: " + timestamp, DEBUG)
-                    log("timestamp: " + timestamp)
-                    # log("postifx/smtp PID: " + postfix_pid, DEBUG)
-                    log("postifx/smtp PID: " + postfix_pid)
-                    if COLOR:
-                        color = None
-                        attr = ['reverse']
-                    else:
-                        color = None
-                        attr = None
-                    cprint(line.rstrip(), color, attrs=attr)                    
-                # elif messageid_re is not None and msg_list:
-                #     log("found message-id: " + messageid_re.group(1))
-                #     for msg in msg_list:
-                #         log("Message object's msg id: " + msg.getmsgid())
-                #         if msg.getmsgid() == messageid_re.group(1):
-                #             #TODO: color the output
-                #             print line,
-                #             msg.addqid(queue_id)                                    
-                # find the queue id of the message and append it to the last Msg in the list
-                # if postfix_pids and timestamps and queue_id != "NOQUEUE":
+                # Lines with queue id of NOQUEUE means the message just arrived, let's look at those
+                if queue_id == "NOQUEUE":
+                    # if there's a line with the "from" and "to" that we want, record the pid and date in a Message obj
+                    from_re = re.search("(.*) (from=<"+from_addr+">) (to=<"+to_addr+".*>) (.*)", generic_text, re.IGNORECASE)
+                    if from_re is not None:
+                        # make a msg object
+                        msg = Message(postfix_pid, timestamp, colors[color_counter%8])
+                        msg_list.append(msg)
+                        color_counter += 1
+                        log("timestamp: " + timestamp)
+                        log("postifx/smtp PID: " + postfix_pid)
+                        if COLOR:
+                            print colored(timestamp, color=None, attrs=['reverse']) + " " + hostname + " " + postfix_process + postfix_pid + "]: " + queue_id + ": " + generic_text
+                        else:
+                            print line,                    
                 elif msg_list and postfix_pid == msg_list[-1].getpid() and timestamp == msg_list[-1].getdate():
                     log("storing qid: " + queue_id)
                     msg_list[-1].addqid(queue_id)   
-                    #TODO: color the output
-                    print line,
+                    if COLOR:
+                        print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg_list[-1].getcolor(), attrs=['bold']) + ": " + generic_text
+                    else:
+                        print line,
                 else:
+                    # Search for the message-id
+                    messageid_re = re.search("message-id=<(.*)>", generic_text, re.IGNORECASE)
                     for msg in msg_list:
                         if msg.hasqid(queue_id):
                             #TODO: color the output
-                            print line,
+                            if COLOR:
+                                print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
+                            else:
+                                print line,
                             if generic_text == "removed":
                                 msg.removeqid(queue_id)
                                 # if all the queued messages have been dealt with, remove msg object
@@ -224,8 +212,10 @@ def main():
                                     msg.addmsgid(messageid_re.group(1))
                         elif messageid_re is not None and msg.getmsgid() == messageid_re.group(1):
                             log("Message object's msg id: " + msg.getmsgid())
-                            #TODO: color the output
-                            print line,
+                            if COLOR:
+                                print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
+                            else:
+                                print line,
                             msg.addqid(queue_id)
                                                  
         if COLOR:
@@ -234,12 +224,18 @@ def main():
         else:
             color = None
             attr = None
+        if color_counter == 0:
+            email_count = "No emails were found."
+        elif color_counter == 1:
+            email_count = "Found 1 email."
+        else:
+            email_count = "Found " + str(color_counter) + " emails."
         print ""
         cprint("Summary:", color, attrs=attr)
         cprint("----------------", color, attrs=attr)
-        cprint("Found " + str(color_counter) + " email(s).", color, attrs=attr)
+        cprint(email_count, color, attrs=attr)
     except IOError:
-        print "Error: unable to read", logfile
+        print "Error: unable to read", in_file
         sys.exit(1)
             
 if __name__ == "__main__":
