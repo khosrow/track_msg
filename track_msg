@@ -153,22 +153,23 @@ def main():
             # sample line:
             # May 23 14:20:38 servername postfix/smtpd[9463]: NOQUEUE: filter: RCPT from mailhost.example.com[10.10.10.11]: <mailhost.example.com[10.10.10.11]>: Client host triggers FILTER smtp:[127.0.0.1]:10025; from=<john.doe@example.com> to=<jane.doe@example.org> proto=ESMTP helo=<mailhost.example.com>
             # tokenize the log line
-            if ( date_stamp == "" ):        
-                search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/\w+\[)(\d+)(\]:) (\w+): (.*)"
-            else:
-                search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.+) (postfix/\w+\[)(\d+)(\]:) (\w): (.*)"
+            # if ( date_stamp == "" ):        
+            #     search_query = "(\w\w\w \s?\d\d? \d\d:\d\d:\d\d) (.*) (postfix/\w+\[)(\d+)(\]:) (\w+): (.*)"
+            # else:
+            #     search_query = "("+date_stamp+" \d\d:\d\d:\d\d) (.+) (postfix/\w+\[)(\d+)(\]:) (\w): (.*)"
+            # m = re.search(search_query, line, re.IGNORECASE)
             
-            # Search for a line that contains both from_addr and to_addr and the date_stamp
-            m = re.search(search_query, line, re.IGNORECASE)
-            if m is not None:
-                # name all matched fields for ease of use
-                timestamp = m.group(1)
-                hostname = m.group(2)
-                postfix_process = m.group(3)
-                postfix_pid = m.group(4)
-                queue_id = m.group(6)
-                generic_text = m.group(7)
-
+            tokens = line.split(' ', 6)
+            timestamp = tokens[0] + " " + tokens[1] + " " + tokens[2]
+            hostname = tokens[3]
+            app, sep, rest = tokens[4].partition('[')
+            process_name, sep, daemon = app.partition('/')
+            postfix_process = process_name + "/" + daemon
+            postfix_pid, sep, junk = rest.partition(']')
+            queue_id = tokens[5].strip(':')
+            generic_text = tokens[6]
+            
+            if process_name == "postfix":
                 # Lines with queue id of NOQUEUE means the message just arrived, let's look at those
                 if queue_id == "NOQUEUE":
                     # if there's a line with the "from" and "to" that we want, record the pid and date in a Message obj
@@ -179,12 +180,13 @@ def main():
                         msg_list.append(msg)
                         color_counter += 1
                         log("timestamp: " + timestamp)
-                        log("postifx/smtp PID: " + postfix_pid)
+                        log("postifx/smtpd PID: " + postfix_pid)
                         if COLOR:
                             print colored(timestamp, color=None, attrs=['reverse']) + " " + hostname + " " + postfix_process + postfix_pid + "]: " + queue_id + ": " + generic_text
                         else:
                             print line,                    
-                elif msg_list and postfix_pid == msg_list[-1].getpid() and timestamp == msg_list[-1].getdate():
+                elif msg_list and queue_id != "disconnect" and postfix_pid == msg_list[-1].getpid() and timestamp == msg_list[-1].getdate():
+                    log("line: " + line.strip())
                     log("storing qid: " + queue_id)
                     msg_list[-1].addqid(queue_id)   
                     if COLOR:
@@ -196,7 +198,7 @@ def main():
                     messageid_re = re.search("message-id=<(.*)>", generic_text, re.IGNORECASE)
                     for msg in msg_list:
                         if msg.hasqid(queue_id):
-                            #TODO: color the output
+                            log("found matching queue_id: " + queue_id)
                             if COLOR:
                                 print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
                             else:
