@@ -158,7 +158,7 @@ def main():
             # May 23 14:20:38 servername postfix/smtpd[9463]: NOQUEUE: filter: RCPT from mailhost.example.com[10.10.10.11]: <mailhost.example.com[10.10.10.11]>: Client host triggers FILTER smtp:[127.0.0.1]:10025; from=<john.doe@example.com> to=<jane.doe@example.org> proto=ESMTP helo=<mailhost.example.com>
 
             # tokenize the log line            
-            tokens = line.split(' ', 6)
+            tokens = line.split(None, 6)
             timestamp = tokens[0] + " " + tokens[1] + " " + tokens[2]
             hostname = tokens[3]
             app, sep, rest = tokens[4].partition('[')
