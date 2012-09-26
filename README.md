@@ -1,16 +1,19 @@
 README
 ======
 
-track_msg is a tool for tracking email messages as they appear in a postfix log file. It finds the email using the parameters given and it will follow it as it is queued and sent using postfix.
+track_msg is a tool for tracking email messages as they appear in a postfix log file. It finds the email(s) by making a match on sender and recipient, it will then follow the email(s) as they are queued and sent using postfix.
 
 
 Usage
--------
+-------	
 
-The following parameters are mandatory
+The following parameters are mandatory:
 + **name of logfile** the file the search will be performed on
 + **sender's email address** the canonical email address of the sender. i.e: john.doe@example.com. No regex matching is done on this address.
 + **receipient's email address** a partial matching of the recipient's email address. So *jane* and *jane.doe* will both match the recipient *jane.doe@example.com*.
+
+**Example**:
+  $ track_msg -i /var/log/mail.log -f john.doe@example.com -t jane.doe@example.com -c
 
 Credits 
 -------
