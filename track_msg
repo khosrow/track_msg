@@ -8,7 +8,7 @@
 
 The message(s) are displayed as they are queued and sent by Postfix.
 
-Usage: track_msg -l [LOGFILE] -f [SENDER ADDRESS] -t [RECIPIENT ADDRESS] [OPTIONS] 
+Usage: track_msg -i [LOGFILE] -f [SENDER ADDRESS] -t [RECIPIENT ADDRESS] [OPTIONS] 
 
 Options:
     -h/--help
