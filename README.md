@@ -13,7 +13,7 @@ The following parameters are mandatory:
 + **receipient's email address** a partial matching of the recipient's email address. So *jane* and *jane.doe* will both match the recipient *jane.doe@example.com*.
 
 **Example**:
-  $ track_msg -i /var/log/mail.log -f john.doe@example.com -t jane.doe@example.com -c
+    $ track_msg -i /var/log/mail.log -f john.doe@example.com -t jane.doe@example.com -c
 
 Credits 
 -------
