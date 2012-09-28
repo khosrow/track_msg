@@ -8,6 +8,7 @@ Usage
 -------	
 
 For detailed usage options please use
+
     $ track_msg -h
 
 The following parameters are mandatory:
@@ -45,4 +46,4 @@ If using the official version, there's a patch that needs to be applied. The pat
 License
 --------
 
-This code is licensed under the [MIT License](https://github.com/khosrow/track_msg/License.md)
+This code is licensed under the [MIT License](https://github.com/khosrow/track_msg/blob/master/License.md)
