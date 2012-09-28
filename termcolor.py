@@ -111,7 +111,7 @@ def colored(text, color=None, on_color=None, attrs=None):
             for attr in attrs:
                 text = fmt_str % (ATTRIBUTES[attr], text)
 
-        if ( color is not None ) or ( on_color is not None ) or ( attrs is not None ):
+        if (color is not None) or (on_color is not None) or (attrs is not None):
 	    text += RESET
     return text
 
