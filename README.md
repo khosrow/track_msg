@@ -8,7 +8,7 @@ Usage
 -------	
 
 For detailed usage options please use
-	$ track_msg -h
+    $ track_msg -h
 
 The following parameters are mandatory:
 + **name of logfile** the file the search will be performed on
@@ -45,4 +45,4 @@ If using the official version, there's a patch that needs to be applied. The pat
 License
 --------
 
-This code is licensed under the [MIT License](License.md)
+This code is licensed under the [MIT License](https://github.com/khosrow/track_msg/License.md)
