@@ -7,6 +7,9 @@ track_msg is a tool for tracking email messages as they appear in a postfix log 
 Usage
 -------	
 
+For detailed usage options please use
+	$ track_msg -h
+
 The following parameters are mandatory:
 + **name of logfile** the file the search will be performed on
 + **sender's email address** the canonical email address of the sender. i.e: john.doe@example.com. No regex matching is done on this address.
@@ -16,20 +19,30 @@ The following parameters are mandatory:
 
     $ track_msg -i /var/log/mail.log -f john.doe@example.com -t jane.doe@example.com -c
 
-Credits 
+termcolor.py 
 -------
 
-Code for colorterm.py was obtained from [PyPi](http://pypi.python.org/pypi/termcolor/)
+Code for termcolor.py was obtained from [PyPi](http://pypi.python.org/pypi/termcolor/) 
+
+If using the official version, there's a patch that needs to be applied. The patch below fixes the problem of color reset when there's no color set. 
+
+```
+--- termcolor-1.1.0.py	2012-09-28 13:51:18.000000000 -0400
++++ termcolor.py	2012-09-28 13:47:31.000000000 -0400
+@@ -111,7 +111,8 @@
+             for attr in attrs:
+                 text = fmt_str % (ATTRIBUTES[attr], text)
+ 
+-        text += RESET
++        if (color is not None) or (on_color is not None) or (attrs is not None):
++	    text += RESET
+     return text
+```
+
+
+
 
 License
 --------
 
-*MIT License*
-
-Copyright (c) 2012 Khosrow Ebrahimpour
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+This code is licensed under the [MIT License](License.md)
