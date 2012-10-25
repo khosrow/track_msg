@@ -1,5 +1,21 @@
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+bin
+var
+sdist
+develop-eggs
+.installed.cfg
+
 # some common Mac OS files to ignore
 .DS_Store
 
 # compiled python script
-*.pyc
+*.py[co]
+
+# sublime text files
+*.sublime-*
