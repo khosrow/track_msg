@@ -33,7 +33,7 @@ Code for termcolor.py was obtained from `PyPi`_
 
 If using the official version, there's a patch that needs to be applied. The patch below fixes the problem of color reset when there's no color set. 
 
-.. code-block:: python
+.. code-block:: diff
 
     --- termcolor-1.1.0.py	2012-09-28 13:51:18.000000000 -0400
     +++ termcolor.py	2012-09-28 13:47:31.000000000 -0400
