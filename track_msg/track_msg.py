@@ -20,6 +20,10 @@ Options:
     --to=TO_ADDR
         email address of the recipient
 
+    -m MSG_ID
+    --msgid=MSG_ID
+        message ID of the email. Usually found in the email header.
+
     -d DATE
     --date=DATE
         date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>
@@ -89,6 +93,12 @@ def log(msg):
     if DEBUG:
         print "DEBUG -- " + msg
 
+def print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, c):
+    if COLOR:
+        print "%s %s %s[%s]: %s: %s" % (timestamp, hostname, postfix_process, postfix_pid, colored(queue_id, c, attrs=['bold']), generic_text)
+    else:
+        print "%s %s %s[%s]: %s: %s" % (timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text)
+
 def main():
     global DEBUG
     global COLOR
@@ -96,12 +106,13 @@ def main():
     from_addr = ""
     to_addr = ""
     date_stamp = ""
+    msg_id = ""
     msg_list = list()
     colors = ['grey' , 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
     color_counter = 0
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hi:f:t:d:cv", ["help", "infile=", "from=", "to=", "date=", "color", "verbose"])
+        opts, args = getopt.getopt(sys.argv[1:], "hi:f:t:d:m:cv", ["help", "infile=", "from=", "to=", "date=", "msgid", "color", "verbose"])
     except getopt.error, msg:
         usage(2, msg)
 
@@ -123,13 +134,17 @@ def main():
             to_addr = arg
         elif opt in ("-d", "--date"):
             date_stamp = arg
+        elif opt in ("-m", "--msgid"):
+            msg_id = arg
         elif opt in ("-c", "--color"):
             COLOR = True
         elif opt in ("-v", "--verbose"):
             DEBUG = True
 
-    if not from_addr or not to_addr or not in_file:
-        usage(2, msg="FROM_ADDR, TO_ADDR, and LOGFILE are mandatory")
+    if not in_file:
+        usage(2, msg="LOGFILE is mandatory")
+    if (not from_addr or not to_addr) and (not msg_id):
+        usage(2, msg="FROM_ADDR, TO_ADDR, or MSG_ID is mandatory")
     
     if not sys.stdout.isatty():
         COLOR = False
@@ -154,26 +169,35 @@ def main():
 
             # tokenize the log line            
             tokens = line.split(None, 6)
+
+            # Useful tokens:
+            # fields 1-3 are the timestamp
             timestamp = tokens[0] + " " + tokens[1] + " " + tokens[2]
+            # field 4 is the local hostname
             hostname = tokens[3]
+            # field 5 contains the pid in the form postfix/$daemon[$PID]
             app, sep, rest = tokens[4].partition('[')
             process_name, sep, daemon = app.partition('/')
             postfix_process = process_name + "/" + daemon
             postfix_pid, sep, junk = rest.partition(']')
+            # field 6 contains the queue ID
             queue_id = tokens[5].strip(':')
+            # field 7 is the rest of the log
             generic_text = tokens[6].strip()
             
+            # For now we only care about Postfix
             if process_name == "postfix":
                 if msg_list and queue_id != "disconnect" and postfix_pid == msg_list[-1].getpid() and timestamp == msg_list[-1].getdate():
                     log("line: " + line.strip())
                     log("storing qid: " + queue_id)
-                    msg_list[-1].addqid(queue_id)   
-                    if COLOR:
-                        print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg_list[-1].getcolor(), attrs=['bold']) + ": " + generic_text
-                    else:
-                        print line,
+                    msg_list[-1].addqid(queue_id)
+                    print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg_list[-1].getcolor())
+                    # if COLOR:
+                    #     print timestamp + " " + hostname + " " + postfix_process + "[" + postfix_pid + "]: " + colored(queue_id, msg_list[-1].getcolor(), attrs=['bold']) + ": " + generic_text
+                    # else:
+                    #     print line,
                 # Incoming emails will be dealt with by postfix/smtpd
-                elif daemon == "smtpd":
+                elif daemon == "smtpd" and from_addr and to_addr:
                     text_lower = generic_text.lower()
                     search_str = "from=<"+from_addr+"> to=<"+to_addr
                     # if there's a line with the "from" and "to" that we want, record the pid and date in a Message obj
@@ -198,10 +222,11 @@ def main():
                     for msg in msg_list:
                         if msg.hasqid(queue_id):
                             log("found matching queue_id: " + queue_id)
-                            if COLOR:
-                                print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
-                            else:
-                                print line,
+                            print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.getcolor())
+                            # if COLOR:
+                            #     print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
+                            # else:
+                            #     print line,
                             if generic_text == "removed":
                                 log("removing qid from Message")
                                 msg.removeqid(queue_id)
@@ -215,12 +240,32 @@ def main():
                                     msg.addmsgid(messageid_re.group(1))
                         elif messageid_re is not None and msg.getmsgid() == messageid_re.group(1):
                             log("Message object's msg id: " + msg.getmsgid())
-                            if COLOR:
-                                print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
-                            else:
-                                print line,
+                            print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.getcolor())
+                            # if COLOR:
+                            #     print timestamp + " " + hostname + " " + postfix_process + "[" + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
+                            # else:
+                            #     print line,
                             msg.addqid(queue_id)
-                                                 
+
+                    # if the user provided a message id, try to match it
+                    if msg_id != "":
+                        messageid_re = re.search("message-id=<(.+)>", generic_text, re.IGNORECASE)
+                        if messageid_re is not None and msg_id == messageid_re.group(1):
+                            log("Message found based on message-id: " + msg_id)
+                            log("Message object created")
+                            log("timestamp: " + timestamp)
+                            log("postifx/smtpd PID: " + postfix_pid)
+                            msg = Message(postfix_pid, timestamp, colors[color_counter%8])
+                            color_counter += 1
+                            msg.addqid(queue_id)
+                            msg.addmsgid(msg_id)
+                            msg_list.append(msg)
+                            print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.getcolor())    
+                            # if a matching msg_id is found, we need to set msg_id="" so that subsequent appearances 
+                            # don't get added as a new Message obj
+                            msg_id = ""
+
+                             
         if COLOR:
             color = "white"
             attr = ['bold']
