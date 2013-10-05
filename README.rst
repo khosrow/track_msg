@@ -19,11 +19,15 @@ The following parameters are mandatory:
 * **name of logfile** the file the search will be performed on
 
 One of :
+
 * **sender's email address** the canonical email address of the sender. i.e: ``john.doe@example.com``. No regex matching is done on this address.
+
 And
+
 * **receipient's email address** a partial matching of the recipient's email address. So *jane* and *jane.doe* will both match the recipient ``jane.doe@example.com``.
 
-Or 
+Or
+
 * **message id** of the email.
 
 example:
