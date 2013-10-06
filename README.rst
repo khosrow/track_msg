@@ -16,8 +16,6 @@ For detailed usage options please use
 
 The following parameters are mandatory:
 
-* **name of logfile** the file the search will be performed on
-
 One of :
 
 * **sender's email address** the canonical email address of the sender. i.e: ``john.doe@example.com``. No regex matching is done on this address.
@@ -33,7 +31,7 @@ Or
 example:
 
 .. code-block::
-    $ track_msg -i /var/log/mail.log -f john.doe@example.com -t jane.doe@example.com -c
+    $ track_msg -s john.doe@example.com -t jane.doe@example.com -c postfix.log
 
 =============
 termcolor.py 
