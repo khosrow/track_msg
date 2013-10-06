@@ -1,50 +1,14 @@
 """Search postfix logs for emails by making a match on sender and recipient. 
 
-The message(s) are displayed as they are queued and sent by Postfix.
-
-Usage: track_msg -i <LOGFILE> -f <SENDER ADDRESS> -t <RECIPIENT ADDRESS> [OPTIONS] 
-
-Options:
-    -h/--help
-        show this message
-
-    -i LOGFILE
-        --infile=LOGFILE
-        name of the Postfix log file to analyze
-
-    -f FROM_ADDR
-    --from=FROM_ADDR
-        email address of the sender
-
-    -t TO_ADDR
-    --to=TO_ADDR
-        email address of the recipient
-
-    -m MSG_ID
-    --msgid=MSG_ID
-        message ID of the email. Usually found in the email header.
-
-    -d DATE
-    --date=DATE
-        date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>
-
-    -c/--color
-        enable color coding of the queue IDs
-
-    -v/--verbose
-        display debug information
-""" 
+The message(s) are displayed as they are queued and sent by Postfix.""" 
 
 import re
-import getopt
-import sys 
-
+import sys
+import argparse
 from termcolor import colored, cprint
 
-program = sys.argv[0]
 COLOR = False
 DEBUG = False
-
 
 # the Message class denotes a unique msg as it enters postfix
 # 
@@ -57,12 +21,7 @@ class Message:
         self.qid_list = list()
         self.msg_id = ""
         self.color = color
-    def getpid(self):
-        return self.pid
-    def getdate(self):
-        return self.date
-    def getqlist(self):
-        return self.qid_list    
+ 
     def addqid(self,qid):
         self.qid_list.append(qid)
     def removeqid(self,qid):
@@ -72,12 +31,7 @@ class Message:
             if qid == q:
                 return True
         return False          
-    def addmsgid(self,msgid):
-        self.msg_id = msgid
-    def getmsgid(self):
-        return self.msg_id
-    def getcolor(self):
-        return self.color
+
                 
 def usage(code,msg=''): 
     if code:
@@ -93,7 +47,7 @@ def log(msg):
     if DEBUG:
         print "DEBUG -- " + msg
 
-def print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, c):
+def print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, c):
     if COLOR:
         print "%s %s %s[%s]: %s: %s" % (timestamp, hostname, postfix_process, postfix_pid, colored(queue_id, c, attrs=['bold']), generic_text)
     else:
@@ -102,49 +56,44 @@ def print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_i
 def main():
     global DEBUG
     global COLOR
-    in_file = ""
-    from_addr = ""
-    to_addr = ""
-    date_stamp = ""
-    msg_id = ""
     msg_list = list()
-    colors = ['grey' , 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
+    colors = ['red', 'green', 'blue', 'magenta', 'grey',  'cyan', 'white', 'yellow']
     color_counter = 0
 
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "hi:f:t:d:m:cv", ["help", "infile=", "from=", "to=", "date=", "msgid", "color", "verbose"])
-    except getopt.error, msg:
-        usage(2, msg)
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description=__doc__)
 
-    if not opts:
-        usage(2)
+    group1 = parser.add_argument_group(title="Option Group 1", description="Search using sender and recipient info")
+    group1.add_argument("-s", "--sender", help="Email address of the sender")
+    group1.add_argument("-t", "--to", metavar="RECIPIENT", help="Email address of the recipient")
 
-    for opt, arg in opts:
-        if opt in ("-h", "--help"):
-            usage(0)
-        elif opt in ("-i", "--infile"):
-            in_file = arg
-        elif opt in ("-f", "--from"):
-            m = re.search("(.*)@(.*)", arg, re.IGNORECASE)
-            if ( m != None):
-                from_addr = arg
-            else:
-                usage(2, msg="ERROR: From address must be a correctly formatted email address.")
-        elif opt in ("-t", "--to"):
-            to_addr = arg
-        elif opt in ("-d", "--date"):
-            date_stamp = arg
-        elif opt in ("-m", "--msgid"):
-            msg_id = arg
-        elif opt in ("-c", "--color"):
-            COLOR = True
-        elif opt in ("-v", "--verbose"):
-            DEBUG = True
+    group2 = parser.add_argument_group(title="Option Group 2", description="Search using message-id")
+    group2.add_argument("-m", "--msgid", metavar="MESSAGE-ID", help="Message ID of the email")
+    # Optional
+    parser.add_argument("-c", "--color", help="Enable colored output", action="store_true")
+    parser.add_argument("-d", "--date", help="Date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>")
+    parser.add_argument("-v", "--verbose", help="Display debugging information", action="store_true")
+    # Files
+    parser.add_argument("file", nargs='*', type=argparse.FileType('r'), default=sys.stdin)
+    args = parser.parse_args()
 
-    if not in_file:
-        usage(2, msg="LOGFILE is mandatory")
-    if (not from_addr or not to_addr) and (not msg_id):
-        usage(2, msg="FROM_ADDR, TO_ADDR, or MSG_ID is mandatory")
+    COLOR = args.color
+    DEBUG = args.verbose
+
+    # verify sender is formatted correctly
+    if args.sender:
+        m = re.search("(.*)@(.*)", args.sender, re.IGNORECASE)
+        if m is None:
+            print "ERROR: Sender address must be a correctly formatted email address."
+            sys.exit(2)
+    if args.msgid:
+        msg_id = args.msgid
+    else:
+        msg_id = ""
+
+    if args.sender is None and args.to is None and args.msgid is None:
+        print "FROM_ADDR, TO_ADDR, or MSG_ID is mandatory"
+        sys.exit(2)
     
     if not sys.stdout.isatty():
         COLOR = False
@@ -154,16 +103,15 @@ def main():
     else:
         color = None
     
-    print colored("Search Params", color)
-    print colored("-------------", color)
-    print colored("Sender: " + from_addr, color)
-    print colored("Recipient: " + to_addr, color)
-    if date_stamp:
-        print colored("Day: " + date_stamp, color)
-    print colored("-------------", color)
+    # Argparse module will accept files or stdin. The check below ensures 
+    # both types of input are treated equally when we begin the search
+    if type(args.file) == list:
+        files = args.file
+    else:
+        files = [args.file]
 
-    try:
-        for line in open(in_file):
+    for f in files:
+        for line in f:
             # sample line:
             # May 23 14:20:38 servername postfix/smtpd[9463]: NOQUEUE: filter: RCPT from mailhost.example.com[10.10.10.11]: <mailhost.example.com[10.10.10.11]>: Client host triggers FILTER smtp:[127.0.0.1]:10025; from=<john.doe@example.com> to=<jane.doe@example.org> proto=ESMTP helo=<mailhost.example.com>
 
@@ -187,21 +135,18 @@ def main():
             
             # For now we only care about Postfix
             if process_name == "postfix":
-                if msg_list and queue_id != "disconnect" and postfix_pid == msg_list[-1].getpid() and timestamp == msg_list[-1].getdate():
+                if msg_list and queue_id != "disconnect" and postfix_pid == msg_list[-1].pid and timestamp == msg_list[-1].date:
                     log("line: " + line.strip())
                     log("storing qid: " + queue_id)
                     msg_list[-1].addqid(queue_id)
-                    print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg_list[-1].getcolor())
-                    # if COLOR:
-                    #     print timestamp + " " + hostname + " " + postfix_process + "[" + postfix_pid + "]: " + colored(queue_id, msg_list[-1].getcolor(), attrs=['bold']) + ": " + generic_text
-                    # else:
-                    #     print line,
+                    print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg_list[-1].color)
+                
                 # Incoming emails will be dealt with by postfix/smtpd
-                elif daemon == "smtpd" and from_addr and to_addr:
+                elif daemon == "smtpd" and args.sender and args.to:
                     text_lower = generic_text.lower()
-                    search_str = "from=<"+from_addr+"> to=<"+to_addr
+                    search_str = "from=<"+args.sender+"> to=<"+args.to
                     # if there's a line with the "from" and "to" that we want, record the pid and date in a Message obj
-                    if (date_stamp is None or timestamp.find(date_stamp) > -1) and text_lower.find(search_str.lower()) > -1:
+                    if (args.date is None or timestamp.find(args.date) > -1) and text_lower.find(search_str.lower()) > -1:
                         # make a new Message object
                         msg = Message(postfix_pid, timestamp, colors[color_counter%8])
                         color_counter += 1
@@ -222,29 +167,21 @@ def main():
                     for msg in msg_list:
                         if msg.hasqid(queue_id):
                             log("found matching queue_id: " + queue_id)
-                            print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.getcolor())
-                            # if COLOR:
-                            #     print timestamp + " " + hostname + " " + postfix_process + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
-                            # else:
-                            #     print line,
+                            print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.color)
                             if generic_text == "removed":
                                 log("removing qid from Message")
                                 msg.removeqid(queue_id)
                                 # if all the queued messages have been dealt with, remove msg object to improve performance
-                                if len(msg.getqlist()) == 0:
+                                if len(msg.qid_list) == 0:
                                     log("message delivered, removing Message")
                                     msg_list.remove(msg)
                             else:    
                                 if messageid_re is not None:
                                     log("found message-id: " + messageid_re.group(1))
-                                    msg.addmsgid(messageid_re.group(1))
-                        elif messageid_re is not None and msg.getmsgid() == messageid_re.group(1):
-                            log("Message object's msg id: " + msg.getmsgid())
-                            print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.getcolor())
-                            # if COLOR:
-                            #     print timestamp + " " + hostname + " " + postfix_process + "[" + postfix_pid + "]: " + colored(queue_id, msg.getcolor(), attrs=['bold']) + ": " + generic_text
-                            # else:
-                            #     print line,
+                                    msg.msg_id = messageid_re.group(1)
+                        elif messageid_re is not None and msg.msg_id == messageid_re.group(1):
+                            log("Message object's msg id: " + msg.msg_id)
+                            print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.color)
                             msg.addqid(queue_id)
 
                     # if the user provided a message id, try to match it
@@ -258,33 +195,42 @@ def main():
                             msg = Message(postfix_pid, timestamp, colors[color_counter%8])
                             color_counter += 1
                             msg.addqid(queue_id)
-                            msg.addmsgid(msg_id)
+                            msg.msg_id = msg_id
                             msg_list.append(msg)
-                            print_line(COLOR, timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.getcolor())    
+                            print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.color)    
                             # if a matching msg_id is found, we need to set msg_id="" so that subsequent appearances 
                             # don't get added as a new Message obj
                             msg_id = ""
 
-                             
-        if COLOR:
-            color = "white"
-            attr = ['bold']
-        else:
-            color = None
-            attr = None
-        if color_counter == 0:
-            email_count = "No emails were found."
-        elif color_counter == 1:
-            email_count = "Found 1 email."
-        else:
-            email_count = "Found " + str(color_counter) + " emails."
-        print ""
-        cprint("Summary:", color, attrs=attr)
-        cprint("----------------", color, attrs=attr)
-        cprint(email_count, color, attrs=attr)
-    except IOError:
-        print "Error: unable to read", in_file
-        sys.exit(1)
+                         
+    if COLOR:
+        color = "white"
+        attr = ['bold']
+    else:
+        color = None
+        attr = None
+    if color_counter == 0:
+        email_count = "No emails were found."
+    elif color_counter == 1:
+        email_count = "Found 1 email."
+    else:
+        email_count = "Found " + str(color_counter) + " emails."
+    print ""
+    cprint("Summary:", color, attrs=attr)
+    cprint("----------------", color, attrs=attr)
+    if args.sender:
+        print colored("Sender: " + args.sender, color)
+    if args.to:
+        print colored("Recipient: " + args.to, color)
+    if args.msgid:
+        print colored("Message-id: " + args.msgid, color)
+    if args.date:
+        print colored("Day: " + args.date, color)
+    cprint(email_count, color, attrs=attr)
             
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print 
+        sys.exit(1)
