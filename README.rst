@@ -31,6 +31,7 @@ Or
 example:
 
 .. code-block::
+    
     $ track_msg -s john.doe@example.com -t jane.doe@example.com -c postfix.log
 
 =============
