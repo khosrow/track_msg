@@ -126,51 +126,71 @@ def main():
                     # TODO: fix this naive search
                     # try to match the from=< and to=< portion in tokens[6]
                     if rest_of_line.find(sender.lower()) > -1 and rest_of_line.find(to.lower()) > -1:
-                        if qid not in ['connec', 'disconnec']:
-                            log("Found a matching from/to")
-                            found = False
-                            if qid == "NOQUEUE":
-                                log("Creating new Message. PID: " + pid)
-                                msg = Message(pid, date_stamp, colors[color_counter % 8])
-                                msg_list.append(msg)
-                                color_counter += 1
-                                print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
-                            elif msg_list:
-                                for m in msg_list:
-                                    if q in msg_list.qid_list:
-                                        log("Existing message")
-                                        found = True
-                                        print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
-                                        # print line,
-                                        break
+                        log("Found a matching from/to")
+                        found = False
+                        if qid == "NOQUEUE":
+                            log("Creating new Message. PID: " + pid)
+                            msg = Message(pid, date_stamp, colors[color_counter % 8])
+                            color_counter += 1
+                            print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
+                            # in this case we need to grab the next log line 
+                            # and get the queue id from it
+                            next_line = next(f)
 
-                            if qid != "NOQUEUE" and not found:
-                                log("Creating new Message. PID: " + pid)
-                                log("Recording Queue ID: " + qid)
-                                msg = Message(pid, date_stamp, colors[color_counter % 8])
-                                msg.qid_list.addqid(qid)
-                                msg_list.append(msg)
-                                color_counter += 1
-                                print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
+                            # TODO: make a tokenizer method
+                            tokens = next_line.split(None, 6)
+                            date_stamp = " ".join(tokens[0:3])
+                            p = tokens[4].split("/")
+                            proc = p[0]
+
+                            if proc == "postfix":
+                                q = p[1].split("[")
+                                daemon = q[0]
+                                pid = q[1][:-2]
+                                qid = tokens[5][:-1]
+
+                            log("Storing queue ID for message: " + qid)
+                            msg.addqid(qid)
+                            print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
+                            msg_list.append(msg)
+                            continue
+
+                        elif msg_list:
+                            for m in msg_list:
+                                if q in msg_list.qid_list:
+                                    log("Existing message")
+                                    found = True
+                                    print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
+                                    break
+
+                        if qid not in ['NOQUEUE', 'connec', 'disconnec'] and not found:
+                            log("Creating new Message. PID: " + pid)
+                            log("Recording Queue ID: " + qid)
+                            msg = Message(pid, date_stamp, colors[color_counter % 8])
+                            msg.addqid(qid)
+                            msg_list.append(msg)
+                            color_counter += 1
+                            print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
                     # if it's an smtpd line but doesn't have the matching from/to
                     else:
                         if msg_list:
                             for m in msg_list:
-                                # this is a weak check. Could probably be improved by searching for from=<user@host>
-                                # the from address should be same as the one provided by user
-                                if pid == m.pid and len(m.qid_list) == 0 and qid not in ['connec', 'disconnec', 'NOQUEUE'] and m.date == date_stamp:
-                                    log("Message pid is: " + m.pid)
-                                    log("Storing queue ID for message: " + qid)
-                                    m.addqid(qid)
-                                    print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
-                                elif m.hasqid(qid):
+                                if m.hasqid(qid):
                                     print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
 
                 # cleanup daemon is what queues the message for the incoming subsystem of postfix
                 # We obtain the unique message-id here
                 # example: message-id=<12345@mx.example.com>
                 elif daemon == "cleanup":
-                    msgid = tokens[6].split("<")[1].rstrip()[:-1]
+                    # msgid = tokens[6].split("<")[1].rstrip()[:-1]
+                    s, sep, m = tokens[6].rstrip().partition('=')
+                    if m == "<>" or m == "":
+                        msgid = ""
+                    elif m[0] == "<":
+                        msgid = m[1:-1]
+                    else:
+                        msgid = m
+
                     found = False
 
                     if msg_list:
@@ -217,7 +237,6 @@ def main():
                             if m.hasqid(qid):
                                 print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
 
-# ====
     if COLOR:
         color = "white"
         attr = ['bold']
