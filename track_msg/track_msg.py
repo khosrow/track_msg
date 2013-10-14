@@ -1,6 +1,6 @@
-"""Search postfix logs for emails by making a match on sender and recipient. 
+"""Search postfix logs for emails by making a match on sender and recipient.
 
-The message(s) are displayed as they are queued and sent by Postfix.""" 
+The message(s) are displayed as they are queued and sent by Postfix."""
 
 import re
 import sys
@@ -10,72 +10,70 @@ from termcolor import colored, cprint
 COLOR = False
 DEBUG = False
 
+
 # the Message class denotes a unique msg as it enters postfix
-# 
+#
 # each message can be queued multiple times, but will have a unique msg id
 # date refers to the first time the message seen in the logfile
 class Message:
-    def __init__(self,pid,date,color):
+    def __init__(self, pid, date, color, msg_id=None):
         self.pid = pid
         self.date = date
         self.qid_list = list()
-        self.msg_id = ""
         self.color = color
- 
-    def addqid(self,qid):
+        self.msg_id = msg_id
+
+    def addqid(self, qid):
         self.qid_list.append(qid)
-    def removeqid(self,qid):
+
+    def removeqid(self, qid):
         self.qid_list.remove(qid)
-    def hasqid(self,qid):
+
+    def hasqid(self, qid):
         for q in self.qid_list:
             if qid == q:
                 return True
-        return False          
+        return False
 
-                
-def usage(code,msg=''): 
-    if code:
-        fd = sys.stderr
-    else:
-        fd = sys.stdout
-    print >> fd, __doc__
-    if msg:
-        print >> fd, msg
-    sys.exit(code)
 
 def log(msg):
     if DEBUG:
         print "DEBUG -- " + msg
 
-def print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, c):
+
+def print_line(s1, queue_id, s2, color):
     if COLOR:
-        print "%s %s %s[%s]: %s: %s" % (timestamp, hostname, postfix_process, postfix_pid, colored(queue_id, c, attrs=['bold']), generic_text)
+        print "%s %s: %s" % (s1, colored(queue_id, color, attrs=['bold']), s2)
     else:
-        print "%s %s %s[%s]: %s: %s" % (timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text)
+        print "%s %s: %s" % (s1, queue_id, s2)
+
 
 def main():
     global DEBUG
     global COLOR
     msg_list = list()
-    colors = ['red', 'green', 'blue', 'magenta', 'grey',  'cyan', 'white', 'yellow']
+    colors = ['red', 'green', 'blue', 'magenta', 'grey', 'cyan', 'white', 'yellow']
     color_counter = 0
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, usage="[options] [file [file ...]]")
 
-    group1 = parser.add_argument_group(title="Option Group 1", description="Search using sender and recipient info")
-    group1.add_argument("-s", "--sender", help="Email address of the sender")
-    group1.add_argument("-t", "--to", metavar="RECIPIENT", help="Email address of the recipient")
-
-    group2 = parser.add_argument_group(title="Option Group 2", description="Search using message-id")
-    group2.add_argument("-m", "--msgid", metavar="MESSAGE-ID", help="Message ID of the email")
+    # One of the 3 options below is needed
+    parser.add_argument("-s", "--sender", help="Email address of the sender")
+    parser.add_argument("-t", "--to", metavar="RECIPIENT", help="Email address of the recipient")
+    parser.add_argument("-m", "--msgid", metavar="MESSAGE-ID", help="Message ID of the email")
     # Optional
     parser.add_argument("-c", "--color", help="Enable colored output", action="store_true")
     parser.add_argument("-d", "--date", help="Date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>")
     parser.add_argument("-v", "--verbose", help="Display debugging information", action="store_true")
     # Files
     parser.add_argument("file", nargs='*', type=argparse.FileType('r'), default=sys.stdin)
-    args = parser.parse_args()
+
+    try:
+        args = parser.parse_args()
+    except IOError as e:
+        print e
+        sys.exit(1)
 
     COLOR = args.color
     DEBUG = args.verbose
@@ -86,24 +84,15 @@ def main():
         if m is None:
             print "ERROR: Sender address must be a correctly formatted email address."
             sys.exit(2)
-    if args.msgid:
-        msg_id = args.msgid
-    else:
-        msg_id = ""
 
     if args.sender is None and args.to is None and args.msgid is None:
         print "FROM_ADDR, TO_ADDR, or MSG_ID is mandatory"
         sys.exit(2)
-    
+
     if not sys.stdout.isatty():
         COLOR = False
-    
-    if COLOR:
-        color = "white"
-    else:
-        color = None
-    
-    # Argparse module will accept files or stdin. The check below ensures 
+
+    # argparse module will accept files or stdin. The check below ensures
     # both types of input are treated equally when we begin the search
     if type(args.file) == list:
         files = args.file
@@ -112,97 +101,140 @@ def main():
 
     for f in files:
         for line in f:
-            # sample line:
-            # May 23 14:20:38 servername postfix/smtpd[9463]: NOQUEUE: filter: RCPT from mailhost.example.com[10.10.10.11]: <mailhost.example.com[10.10.10.11]>: Client host triggers FILTER smtp:[127.0.0.1]:10025; from=<john.doe@example.com> to=<jane.doe@example.org> proto=ESMTP helo=<mailhost.example.com>
-
-            # tokenize the log line            
+            # Break up the log line using spaces. This will give us something like this:
+            # $DATE $HOSTNAME $PROC/$DAEMON[$PID]: $QID: $RESTOFLINE
+            # Note that $QID is not always the queue id of the message.
             tokens = line.split(None, 6)
 
-            # Useful tokens:
-            # fields 1-3 are the timestamp
-            timestamp = tokens[0] + " " + tokens[1] + " " + tokens[2]
-            # field 4 is the local hostname
-            hostname = tokens[3]
-            # field 5 contains the pid in the form postfix/$daemon[$PID]
-            app, sep, rest = tokens[4].partition('[')
-            process_name, sep, daemon = app.partition('/')
-            postfix_process = process_name + "/" + daemon
-            postfix_pid, sep, junk = rest.partition(']')
-            # field 6 contains the queue ID
-            queue_id = tokens[5].strip(':')
-            # field 7 is the rest of the log
-            generic_text = tokens[6].strip()
-            
-            # For now we only care about Postfix
-            if process_name == "postfix":
-                if msg_list and queue_id != "disconnect" and postfix_pid == msg_list[-1].pid and timestamp == msg_list[-1].date:
-                    log("line: " + line.strip())
-                    log("storing qid: " + queue_id)
-                    msg_list[-1].addqid(queue_id)
-                    print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg_list[-1].color)
-                
-                # Incoming emails will be dealt with by postfix/smtpd
-                elif daemon == "smtpd" and args.sender and args.to:
-                    text_lower = generic_text.lower()
-                    search_str = "from=<"+args.sender+"> to=<"+args.to
-                    # if there's a line with the "from" and "to" that we want, record the pid and date in a Message obj
-                    if (args.date is None or timestamp.find(args.date) > -1) and text_lower.find(search_str.lower()) > -1:
-                        # make a new Message object
-                        msg = Message(postfix_pid, timestamp, colors[color_counter%8])
-                        color_counter += 1
-                        if queue_id != "NOQUEUE":
-                            msg.addqid(queue_id)
-                        msg_list.append(msg)
-                        log("timestamp: " + timestamp)
-                        log("postifx/smtpd PID: " + postfix_pid)
-                        if COLOR:
-                            print colored(timestamp, color=None, attrs=['reverse']) + " " + hostname + " " + postfix_process + postfix_pid + "]: " + queue_id + ": " + generic_text
-                        else:
-                            print line,
-                else:
-                    # Search for the unique message-id of the email
-                    # this will be used later to identify the same msg if it gets requeued by Postfix
-                    if msg_list:
-                        messageid_re = re.search("message-id=<(.+)>", generic_text, re.IGNORECASE)
-                    for msg in msg_list:
-                        if msg.hasqid(queue_id):
-                            log("found matching queue_id: " + queue_id)
-                            print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.color)
-                            if generic_text == "removed":
-                                log("removing qid from Message")
-                                msg.removeqid(queue_id)
-                                # if all the queued messages have been dealt with, remove msg object to improve performance
-                                if len(msg.qid_list) == 0:
-                                    log("message delivered, removing Message")
-                                    msg_list.remove(msg)
-                            else:    
-                                if messageid_re is not None:
-                                    log("found message-id: " + messageid_re.group(1))
-                                    msg.msg_id = messageid_re.group(1)
-                        elif messageid_re is not None and msg.msg_id == messageid_re.group(1):
-                            log("Message object's msg id: " + msg.msg_id)
-                            print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.color)
-                            msg.addqid(queue_id)
+            date_stamp = " ".join(tokens[0:3])
+            p = tokens[4].split("/")
+            proc = p[0]
 
-                    # if the user provided a message id, try to match it
-                    if msg_id != "":
-                        messageid_re = re.search("message-id=<(.+)>", generic_text, re.IGNORECASE)
-                        if messageid_re is not None and msg_id == messageid_re.group(1):
-                            log("Message found based on message-id: " + msg_id)
-                            log("Message object created")
-                            log("timestamp: " + timestamp)
-                            log("postifx/smtpd PID: " + postfix_pid)
-                            msg = Message(postfix_pid, timestamp, colors[color_counter%8])
+            if proc == "postfix":
+                q = p[1].split("[")
+                daemon = q[0]
+                pid = q[1][:-2]
+                qid = tokens[5][:-1]
+
+                # smtpd daemon handles all incoming network connections
+                if daemon == "smtpd":
+                    rest_of_line = tokens[6].lower()
+                    sender = "from=<" + args.sender
+                    to = "to=<" + args.to
+                    # TODO: fix this naive search
+                    # try to match the from=< and to=< portion in tokens[6]
+                    if rest_of_line.find(sender.lower()) > -1 and rest_of_line.find(to.lower()) > -1:
+                        log("Found a matching from/to")
+                        found = False
+                        if qid == "NOQUEUE":
+                            log("Creating new Message. PID: " + pid)
+                            msg = Message(pid, date_stamp, colors[color_counter % 8])
                             color_counter += 1
-                            msg.addqid(queue_id)
-                            msg.msg_id = msg_id
-                            msg_list.append(msg)
-                            print_line(timestamp, hostname, postfix_process, postfix_pid, queue_id, generic_text, msg.color)    
-                            # if a matching msg_id is found, we need to set msg_id="" so that subsequent appearances 
-                            # don't get added as a new Message obj
-                            msg_id = ""
+                            print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
+                            # in this case we need to grab the next log line 
+                            # and get the queue id from it
+                            next_line = next(f)
 
-                         
+                            # TODO: make a tokenizer method
+                            tokens = next_line.split(None, 6)
+                            date_stamp = " ".join(tokens[0:3])
+                            p = tokens[4].split("/")
+                            proc = p[0]
+
+                            if proc == "postfix":
+                                q = p[1].split("[")
+                                daemon = q[0]
+                                pid = q[1][:-2]
+                                qid = tokens[5][:-1]
+
+                            log("Storing queue ID for message: " + qid)
+                            msg.addqid(qid)
+                            print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
+                            msg_list.append(msg)
+                            continue
+
+                        elif msg_list:
+                            for m in msg_list:
+                                if q in msg_list.qid_list:
+                                    log("Existing message")
+                                    found = True
+                                    print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
+                                    break
+
+                        if qid not in ['NOQUEUE', 'connec', 'disconnec'] and not found:
+                            log("Creating new Message. PID: " + pid)
+                            log("Recording Queue ID: " + qid)
+                            msg = Message(pid, date_stamp, colors[color_counter % 8])
+                            msg.addqid(qid)
+                            msg_list.append(msg)
+                            color_counter += 1
+                            print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
+                    # if it's an smtpd line but doesn't have the matching from/to
+                    else:
+                        if msg_list:
+                            for m in msg_list:
+                                if m.hasqid(qid):
+                                    print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
+
+                # cleanup daemon is what queues the message for the incoming subsystem of postfix
+                # We obtain the unique message-id here
+                # example: message-id=<12345@mx.example.com>
+                elif daemon == "cleanup":
+                    # msgid = tokens[6].split("<")[1].rstrip()[:-1]
+                    s, sep, m = tokens[6].rstrip().partition('=')
+                    if m == "<>" or m == "":
+                        msgid = ""
+                    elif m[0] == "<":
+                        msgid = m[1:-1]
+                    else:
+                        msgid = m
+
+                    found = False
+
+                    if msg_list:
+                        for m in msg_list:
+                            # if the message is already queued, store the message id
+                            if m.hasqid(qid):
+                                log("Found msg-id of previously queued msg: " + qid)
+                                m.msg_id = msgid
+                                print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
+                                found = True
+                            # here the msg-id has been seen before, and the msg isn't queued previously
+                            elif m.msg_id and msgid == m.msg_id:
+                                log("Found new qid for previously seen message: " + msgid)
+                                m.addqid(qid)
+                                print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
+                                found = True
+
+                    # If the msg-id was passed on command line and we haven't seen it before
+                    if args.msgid and args.msgid == msgid:
+                        if not found:
+                            log("Creating new Message. msg-id: " + msgid)
+                            log("Recording Queue ID: " + qid)
+                            msg = Message(pid, date_stamp, colors[color_counter % 8])
+                            msg.qid_list.addqid(qid)
+                            msg_list.append(msg)
+                            color_counter += 1
+                            print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
+
+                # the qmgr daemon also removed the queued message and we will do the same
+                elif daemon == "qmgr":
+                    if msg_list:
+                        for m in msg_list:
+                            if m.hasqid(qid):
+                                print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
+                                # print line,
+                                if tokens[6].rstrip() == "removed":
+                                    log("Removing queued msg: " + m.msg_id)
+                                    m.qid_list.remove(qid)
+
+                # for other daemons (i.e smtp) simply look for matching queue id
+                else:
+                    if msg_list:
+                        for m in msg_list:
+                            if m.hasqid(qid):
+                                print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
+
     if COLOR:
         color = "white"
         attr = ['bold']
@@ -227,10 +259,10 @@ def main():
     if args.date:
         print colored("Day: " + args.date, color)
     cprint(email_count, color, attrs=attr)
-            
+
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print 
+        print
         sys.exit(1)
