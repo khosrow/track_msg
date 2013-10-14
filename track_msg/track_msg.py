@@ -56,14 +56,12 @@ def main():
     color_counter = 0
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, usage="[options] [file [file ...]]")
 
-    group1 = parser.add_argument_group(title="Option Group 1", description="Search using sender and recipient info")
-    group1.add_argument("-s", "--sender", help="Email address of the sender")
-    group1.add_argument("-t", "--to", metavar="RECIPIENT", help="Email address of the recipient")
-
-    group2 = parser.add_argument_group(title="Option Group 2", description="Search using message-id")
-    group2.add_argument("-m", "--msgid", metavar="MESSAGE-ID", help="Message ID of the email")
+    # One of the 3 options below is needed
+    parser.add_argument("-s", "--sender", help="Email address of the sender")
+    parser.add_argument("-t", "--to", metavar="RECIPIENT", help="Email address of the recipient")
+    parser.add_argument("-m", "--msgid", metavar="MESSAGE-ID", help="Message ID of the email")
     # Optional
     parser.add_argument("-c", "--color", help="Enable colored output", action="store_true")
     parser.add_argument("-d", "--date", help="Date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>")
