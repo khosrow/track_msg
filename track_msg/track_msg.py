@@ -56,7 +56,7 @@ def main():
     color_counter = 0
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description=__doc__, usage="[options] [file [file ...]]")
+    parser = argparse.ArgumentParser(description=__doc__, usage="track_msg [options] [file [file ...]]")
 
     # One of the 3 options below is needed
     parser.add_argument("-s", "--sender", help="Email address of the sender")
