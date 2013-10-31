@@ -5,6 +5,7 @@ The message(s) are displayed as they are queued and sent by Postfix."""
 import re
 import sys
 import argparse
+import __init__ as appinfo
 from termcolor import colored, cprint
 
 COLOR = False
@@ -38,7 +39,7 @@ class Message:
 
 def log(msg):
     if DEBUG:
-        print "DEBUG -- " + msg
+        print "DEBUG -- %s" % msg
 
 
 def print_line(s1, queue_id, s2, color):
@@ -56,7 +57,7 @@ def main():
     color_counter = 0
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description=__doc__, usage="track_msg [options] [file [file ...]]")
+    parser = argparse.ArgumentParser(description=__doc__, usage="%(prog)s [options] [file [file ...]]")
 
     # One of the 3 options below is needed
     parser.add_argument("-s", "--sender", help="Email address of the sender")
@@ -66,6 +67,7 @@ def main():
     parser.add_argument("-c", "--color", help="Enable colored output", action="store_true")
     parser.add_argument("-d", "--date", help="Date stamp of the email. Format: <MMM DD>, <MMM DD HH:mm> or <MMM DD HH:mm:ss>")
     parser.add_argument("-v", "--verbose", help="Display debugging information", action="store_true")
+    parser.add_argument("-V", "--version", action="version", version="%(prog)s {0}".format(appinfo.__version__))
     # Files
     parser.add_argument("file", nargs='*', type=argparse.FileType('r'), default=sys.stdin)
 
@@ -118,16 +120,20 @@ def main():
 
                 # smtpd daemon handles all incoming network connections
                 if daemon == "smtpd":
-                    rest_of_line = tokens[6].lower()
-                    sender = "from=<" + args.sender
-                    to = "to=<" + args.to
+                    if args.sender and args.to:
+                        rest_of_line = tokens[6].lower()
+                        sender = "from=<" + args.sender
+                        to = "to=<" + args.to
                     # TODO: fix this naive search
                     # try to match the from=< and to=< portion in tokens[6]
-                    if rest_of_line.find(sender.lower()) > -1 and rest_of_line.find(to.lower()) > -1:
+                    if ( args.sender and 
+                        args.to and 
+                        rest_of_line.find(sender.lower()) > -1 
+                        and rest_of_line.find(to.lower()) > -1):
                         log("Found a matching from/to")
                         found = False
                         if qid == "NOQUEUE":
-                            log("Creating new Message. PID: " + pid)
+                            log("Creating new Message. PID: %s" % pid)
                             msg = Message(pid, date_stamp, colors[color_counter % 8])
                             color_counter += 1
                             print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
@@ -147,7 +153,7 @@ def main():
                                 pid = q[1][:-2]
                                 qid = tokens[5][:-1]
 
-                            log("Storing queue ID for message: " + qid)
+                            log("Storing queue ID for message: %s" % qid)
                             msg.addqid(qid)
                             print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
                             msg_list.append(msg)
@@ -162,8 +168,8 @@ def main():
                                     break
 
                         if qid not in ['NOQUEUE', 'connec', 'disconnec'] and not found:
-                            log("Creating new Message. PID: " + pid)
-                            log("Recording Queue ID: " + qid)
+                            log("Creating new Message. PID: %s" % pid)
+                            log("Recording Queue ID: %s" % qid)
                             msg = Message(pid, date_stamp, colors[color_counter % 8])
                             msg.addqid(qid)
                             msg_list.append(msg)
@@ -195,13 +201,13 @@ def main():
                         for m in msg_list:
                             # if the message is already queued, store the message id
                             if m.hasqid(qid):
-                                log("Found msg-id of previously queued msg: " + qid)
+                                log("Found msg-id of previously queued msg: %s" % qid)
                                 m.msg_id = msgid
                                 print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
                                 found = True
                             # here the msg-id has been seen before, and the msg isn't queued previously
                             elif m.msg_id and msgid == m.msg_id:
-                                log("Found new qid for previously seen message: " + msgid)
+                                log("Found new qid for previously seen message: %s" % msgid)
                                 m.addqid(qid)
                                 print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
                                 found = True
@@ -209,10 +215,10 @@ def main():
                     # If the msg-id was passed on command line and we haven't seen it before
                     if args.msgid and args.msgid == msgid:
                         if not found:
-                            log("Creating new Message. msg-id: " + msgid)
-                            log("Recording Queue ID: " + qid)
+                            log("Creating new Message. msg-id: %s" % msgid)
+                            log("Recording Queue ID: %s" % qid)
                             msg = Message(pid, date_stamp, colors[color_counter % 8])
-                            msg.qid_list.addqid(qid)
+                            msg.addqid(qid)
                             msg_list.append(msg)
                             color_counter += 1
                             print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), msg.color)
@@ -225,7 +231,7 @@ def main():
                                 print_line(" ".join(tokens[0:5]), qid, tokens[6].rstrip(), m.color)
                                 # print line,
                                 if tokens[6].rstrip() == "removed":
-                                    log("Removing queued msg: " + m.msg_id)
+                                    log("Removing queued msg: %s " % m.msg_id)
                                     m.qid_list.remove(qid)
 
                 # for other daemons (i.e smtp) simply look for matching queue id
