@@ -256,7 +256,8 @@ def main():
                             log("Recording Queue ID: %s" % qid)
                             msg = Message(pid,
                                           date_stamp,
-                                          colors[color_counter % 8])
+                                          colors[color_counter % 8],
+                                          msgid)
                             msg.qid_list.append(qid)
                             msg_list.append(msg)
                             color_counter += 1
